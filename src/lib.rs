@@ -3,8 +3,7 @@ use std::sync::mpsc;
 use std::thread;
 use termion::event::Key;
 use termion::input::TermRead;
-use termion::raw::IntoRawMode;
-use tui::backend::TermionBackend;
+use tui::backend::Backend;
 use tui::layout::{Alignment, Constraint, Direction, Layout};
 use tui::style::Color;
 use tui::text::{Span, Spans};
@@ -12,10 +11,10 @@ use tui::widgets::canvas::{Canvas, Rectangle};
 use tui::widgets::{Block, BorderType, Borders, Paragraph, Wrap};
 use tui::Terminal;
 
-fn main() -> Result<(), io::Error> {
-    let stdout = io::stdout().into_raw_mode()?;
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+pub fn run<B>(mut terminal: Terminal<B>) -> Result<(), io::Error>
+where
+    B: Backend,
+{
     terminal.hide_cursor()?;
     terminal.clear()?;
     let mut stop = false;
@@ -51,10 +50,12 @@ fn main() -> Result<(), io::Error> {
                     Spans::from(Span::raw("Welcome to the game")),
                     Spans::from(Span::raw("This is how to play the game")),
                     Spans::from(""),
-                    Spans::from(Span::raw("Move up: W")),
-                    Spans::from(Span::raw("Move down: S")),
-                    Spans::from(Span::raw("Move left: A")),
-                    Spans::from(Span::raw("Move right: D")),
+                    Spans::from(Span::raw("Move up: up")),
+                    Spans::from(Span::raw("Move down: down")),
+                    Spans::from(Span::raw("Move left: left")),
+                    Spans::from(Span::raw("Move right: right")),
+                    Spans::from(""),
+                    Spans::from(Span::raw("Quit the game: q")),
                 ];
                 let block = Paragraph::new(text)
                     .block(Block::default().title("How to play").borders(Borders::ALL))
