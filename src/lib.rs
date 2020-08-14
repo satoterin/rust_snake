@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io;
 use std::sync::mpsc;
 use std::thread;
@@ -17,6 +18,7 @@ struct Snake {
     direction: SnakeDirection,
 }
 
+#[derive(PartialEq)]
 struct SnakeUnit {
     x: f64,
     y: f64,
@@ -31,11 +33,13 @@ impl Clone for SnakeUnit {
     }
 }
 
+#[derive(PartialEq)]
 enum SnakeDirection {
     Up,
     Down,
     Left,
     Right,
+    Stopped,
 }
 
 enum GameState {
@@ -43,41 +47,78 @@ enum GameState {
     Running,
 }
 
+#[derive(Debug, Clone)]
+struct CollisionError;
+
+impl fmt::Display for CollisionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "There was a collision detected")
+    }
+}
+
 const UNIT: f64 = 5.0;
 const BOUND: f64 = 100.0;
 
 impl Snake {
-    fn update(&mut self) {
+    fn update(&mut self) -> Result<(), CollisionError> {
         match self.direction {
             SnakeDirection::Up => {
                 let first = self.shape.get(0).unwrap().clone();
                 let SnakeUnit { y, .. } = first;
                 let y = if y > (BOUND - UNIT) { -BOUND } else { y + UNIT };
-                self.shape.insert(0, SnakeUnit { y, ..first });
                 self.shape.pop();
+                let new_block = SnakeUnit { y, ..first };
+                if self.occupied(&new_block) {
+                    Err(CollisionError)
+                } else {
+                    self.shape.insert(0, new_block);
+                    Ok(())
+                }
             }
             SnakeDirection::Down => {
                 let first = self.shape.first().unwrap().clone();
                 let SnakeUnit { y, .. } = first;
                 let y = if y < (-BOUND + UNIT) { BOUND } else { y - UNIT };
                 self.shape.pop();
-                self.shape.insert(0, SnakeUnit { y, ..first });
+                let new_block = SnakeUnit { y, ..first };
+                if self.occupied(&new_block) {
+                    Err(CollisionError)
+                } else {
+                    self.shape.insert(0, new_block);
+                    Ok(())
+                }
             }
             SnakeDirection::Right => {
                 let first = self.shape.first().unwrap().clone();
                 let SnakeUnit { x, .. } = first;
                 let x = if x > (BOUND - UNIT) { -BOUND } else { x + UNIT };
                 self.shape.pop();
-                self.shape.insert(0, SnakeUnit { x, ..first });
+                let new_block = SnakeUnit { x, ..first };
+                if self.occupied(&new_block) {
+                    Err(CollisionError)
+                } else {
+                    self.shape.insert(0, new_block);
+                    Ok(())
+                }
             }
             SnakeDirection::Left => {
                 let first = self.shape.first().unwrap().clone();
                 let SnakeUnit { x, .. } = first;
                 let x = if x < (-BOUND + UNIT) { BOUND } else { x - UNIT };
                 self.shape.pop();
-                self.shape.insert(0, SnakeUnit { x, ..first });
+                let new_block = SnakeUnit { x, ..first };
+                if self.occupied(&new_block) {
+                    Err(CollisionError)
+                } else {
+                    self.shape.insert(0, new_block);
+                    Ok(())
+                }
             }
+            SnakeDirection::Stopped => Ok(()),
         }
+    }
+    fn occupied(&self, block: &SnakeUnit) -> bool {
+        self.shape.iter().any(|x| x.eq(block))
     }
 }
 
@@ -131,7 +172,12 @@ where
     };
     loop {
         // Rendering the frame
-        snake.update();
+        match snake.update() {
+            Ok(()) => {}
+            Err(CollisionError) => {
+                snake.direction = SnakeDirection::Stopped;
+            }
+        };
         thread::sleep(Duration::from_millis(100));
         render_screen(&mut terminal, &mut snake)?;
 
@@ -160,19 +206,39 @@ where
                 Ok(GameState::Done)
             }
             Key::Up => {
-                snake.direction = SnakeDirection::Up;
+                if snake.direction != SnakeDirection::Up
+                    && snake.direction != SnakeDirection::Down
+                    && snake.direction != SnakeDirection::Stopped
+                {
+                    snake.direction = SnakeDirection::Up;
+                }
                 Ok(GameState::Running)
             }
             Key::Down => {
-                snake.direction = SnakeDirection::Down;
+                if snake.direction != SnakeDirection::Up
+                    && snake.direction != SnakeDirection::Down
+                    && snake.direction != SnakeDirection::Stopped
+                {
+                    snake.direction = SnakeDirection::Down;
+                }
                 Ok(GameState::Running)
             }
             Key::Right => {
-                snake.direction = SnakeDirection::Right;
+                if snake.direction != SnakeDirection::Left
+                    && snake.direction != SnakeDirection::Right
+                    && snake.direction != SnakeDirection::Stopped
+                {
+                    snake.direction = SnakeDirection::Right;
+                }
                 Ok(GameState::Running)
             }
             Key::Left => {
-                snake.direction = SnakeDirection::Left;
+                if snake.direction != SnakeDirection::Left
+                    && snake.direction != SnakeDirection::Right
+                    && snake.direction != SnakeDirection::Stopped
+                {
+                    snake.direction = SnakeDirection::Left;
+                }
                 Ok(GameState::Running)
             }
             _ => Ok(GameState::Running),
