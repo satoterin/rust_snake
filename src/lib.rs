@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::fmt;
 use std::io;
 use std::sync::mpsc;
@@ -16,6 +17,8 @@ use tui::Terminal;
 struct Snake {
     shape: Vec<SnakeUnit>,
     direction: SnakeDirection,
+    eaten: Vec<SnakeUnit>,
+    score: i32,
 }
 
 #[derive(PartialEq)]
@@ -57,16 +60,35 @@ impl fmt::Display for CollisionError {
 }
 
 const UNIT: f64 = 5.0;
-const BOUND: f64 = 100.0;
+const RANGE: f64 = 20.0;
+const BOUND: f64 = UNIT * RANGE;
 
 impl Snake {
-    fn update(&mut self) -> Result<(), CollisionError> {
+    fn update(&mut self, food: &mut SnakeUnit) -> Result<(), CollisionError> {
         match self.direction {
             SnakeDirection::Up => {
                 let first = self.shape.get(0).unwrap().clone();
+                if first == *food {
+                    self.eaten.insert(
+                        0,
+                        SnakeUnit {
+                            x: food.x,
+                            y: food.y,
+                        },
+                    );
+                    self.score += 10;
+                    let new_food = random_snake_unit(&self);
+                    food.x = new_food.x;
+                    food.y = new_food.y;
+                }
                 let SnakeUnit { y, .. } = first;
                 let y = if y > (BOUND - UNIT) { -BOUND } else { y + UNIT };
-                self.shape.pop();
+                if let (Some(eaten), Some(last)) = (self.eaten.last(), self.shape.pop()) {
+                    if last == *eaten {
+                        self.shape.push(last);
+                        self.eaten.pop();
+                    }
+                }
                 let new_block = SnakeUnit { y, ..first };
                 if self.occupied(&new_block) {
                     Err(CollisionError)
@@ -77,9 +99,27 @@ impl Snake {
             }
             SnakeDirection::Down => {
                 let first = self.shape.first().unwrap().clone();
+                if first == *food {
+                    self.eaten.insert(
+                        0,
+                        SnakeUnit {
+                            x: food.x,
+                            y: food.y,
+                        },
+                    );
+                    self.score += 10;
+                    let new_food = random_snake_unit(&self);
+                    food.x = new_food.x;
+                    food.y = new_food.y;
+                }
                 let SnakeUnit { y, .. } = first;
                 let y = if y < (-BOUND + UNIT) { BOUND } else { y - UNIT };
-                self.shape.pop();
+                if let (Some(eaten), Some(last)) = (self.eaten.last(), self.shape.pop()) {
+                    if last == *eaten {
+                        self.shape.push(last);
+                        self.eaten.pop();
+                    }
+                }
                 let new_block = SnakeUnit { y, ..first };
                 if self.occupied(&new_block) {
                     Err(CollisionError)
@@ -90,9 +130,27 @@ impl Snake {
             }
             SnakeDirection::Right => {
                 let first = self.shape.first().unwrap().clone();
+                if first == *food {
+                    self.eaten.insert(
+                        0,
+                        SnakeUnit {
+                            x: food.x,
+                            y: food.y,
+                        },
+                    );
+                    self.score += 10;
+                    let new_food = random_snake_unit(&self);
+                    food.x = new_food.x;
+                    food.y = new_food.y;
+                }
                 let SnakeUnit { x, .. } = first;
                 let x = if x > (BOUND - UNIT) { -BOUND } else { x + UNIT };
-                self.shape.pop();
+                if let (Some(eaten), Some(last)) = (self.eaten.last(), self.shape.pop()) {
+                    if last == *eaten {
+                        self.shape.push(last);
+                        self.eaten.pop();
+                    }
+                }
                 let new_block = SnakeUnit { x, ..first };
                 if self.occupied(&new_block) {
                     Err(CollisionError)
@@ -103,9 +161,27 @@ impl Snake {
             }
             SnakeDirection::Left => {
                 let first = self.shape.first().unwrap().clone();
+                if first == *food {
+                    self.eaten.insert(
+                        0,
+                        SnakeUnit {
+                            x: food.x,
+                            y: food.y,
+                        },
+                    );
+                    self.score += 10;
+                    let new_food = random_snake_unit(&self);
+                    food.x = new_food.x;
+                    food.y = new_food.y;
+                }
                 let SnakeUnit { x, .. } = first;
                 let x = if x < (-BOUND + UNIT) { BOUND } else { x - UNIT };
-                self.shape.pop();
+                if let (Some(eaten), Some(last)) = (self.eaten.last(), self.shape.pop()) {
+                    if last == *eaten {
+                        self.shape.push(last);
+                        self.eaten.pop();
+                    }
+                }
                 let new_block = SnakeUnit { x, ..first };
                 if self.occupied(&new_block) {
                     Err(CollisionError)
@@ -119,6 +195,23 @@ impl Snake {
     }
     fn occupied(&self, block: &SnakeUnit) -> bool {
         self.shape.iter().any(|x| x.eq(block))
+    }
+}
+
+fn random_snake_unit(snake: &Snake) -> SnakeUnit {
+    let mut rng = rand::thread_rng();
+    loop {
+        let x = rng.gen_range(-RANGE as i32, RANGE as i32);
+        let y = rng.gen_range(-RANGE as i32, RANGE as i32);
+        let food = SnakeUnit {
+            x: (x as f64) * UNIT,
+            y: (y as f64) * UNIT,
+        };
+        if snake.occupied(&food) {
+            continue;
+        } else {
+            break food;
+        }
     }
 }
 
@@ -149,7 +242,10 @@ where
             SnakeUnit { x: 0.0, y: 0.0 },
         ],
         direction: SnakeDirection::Up,
+        eaten: Vec::new(),
+        score: 0,
     };
+    let mut food = random_snake_unit(&snake);
     let (tx, rx) = mpsc::channel();
     let _input_handle = {
         let tx = tx.clone();
@@ -172,14 +268,14 @@ where
     };
     loop {
         // Rendering the frame
-        match snake.update() {
+        match snake.update(&mut food) {
             Ok(()) => {}
             Err(CollisionError) => {
                 snake.direction = SnakeDirection::Stopped;
             }
         };
         thread::sleep(Duration::from_millis(100));
-        render_screen(&mut terminal, &mut snake)?;
+        render_screen(&mut terminal, &snake, &food)?;
 
         // Event handling
         match event_handler(&mut terminal, &mut snake, &rx) {
@@ -247,7 +343,11 @@ where
     }
 }
 
-fn render_screen<B>(terminal: &mut Terminal<B>, snake: &mut Snake) -> Result<(), io::Error>
+fn render_screen<B>(
+    terminal: &mut Terminal<B>,
+    snake: &Snake,
+    food: &SnakeUnit,
+) -> Result<(), io::Error>
 where
     B: Backend,
 {
@@ -275,6 +375,13 @@ where
                         color: Color::Red,
                     };
                     ctx.draw(&rect);
+                });
+                ctx.draw(&Rectangle {
+                    x: food.x,
+                    y: food.y,
+                    width: UNIT,
+                    height: UNIT,
+                    color: Color::Green,
                 })
             });
         f.render_widget(canvas, chunks[0]);
@@ -289,6 +396,8 @@ where
             Spans::from(Span::raw("Move right: right")),
             Spans::from(""),
             Spans::from(Span::raw("Quit the game: q")),
+            Spans::from(""),
+            Spans::from(Span::raw(format!("Score: {}", snake.score))),
         ];
         let block = Paragraph::new(text)
             .block(Block::default().title("How to play").borders(Borders::ALL))
